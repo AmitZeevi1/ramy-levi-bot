@@ -80,6 +80,32 @@ app.post('/test', async (req, res) => {
   }
 });
 
+// ─────────────────────────────────────────────
+// GET /debug  — test Rami Levy API directly
+// ─────────────────────────────────────────────
+app.get('/debug', async (req, res) => {
+  try {
+    const response = await axios.get('https://www.rami-levy.co.il/api/catalog', {
+      headers: {
+        'accept': 'application/json, text/plain, */*',
+        'accept-language': 'he-IL,he;q=0.9',
+        'authorization': `Bearer ${process.env.RAMI_LEVY_API_KEY}`,
+        'ecomtoken': process.env.RAMI_LEVY_ECOM_TOKEN,
+        'cookie': process.env.RAMI_LEVY_COOKIE,
+        'locale': 'he',
+        'origin': 'https://www.rami-levy.co.il',
+        'referer': 'https://www.rami-levy.co.il/he',
+        'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      },
+      params: { q: 'חלב', store: process.env.RAMI_LEVY_STORE_ID || '331', aggs: 1 },
+      timeout: 8000,
+    });
+    res.json({ status: response.status, count: response.data?.data?.length, first: response.data?.data?.[0] });
+  } catch (err) {
+    res.status(500).json({ status: err.response?.status, message: err.message, data: err.response?.data });
+  }
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`\n🤖 RamiBot (Green API) running on port ${PORT}`);
