@@ -1,0 +1,20 @@
+{
+  "name": "rami-levy-whatsapp-bot",
+  "version": "1.0.0",
+  "description": "WhatsApp bot that builds a Rami Levy cart from a pasted shopping list",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js"
+  },
+  "dependencies": {
+    "@green-api/whatsapp-api-client": "^0.4.4",
+    "axios": "^1.15.1",
+    "body-parser": "^1.20.2",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  }
+}
