@@ -1,23 +1,22 @@
 services:
-  - type: web
+  - type: worker
     name: rami-levy-bot
     env: node
     plan: free
     buildCommand: npm install
     startCommand: npm start
-    healthCheckPath: /health
     envVars:
-      - key: GREEN_API_INSTANCE_ID
+      - key: TELEGRAM_BOT_TOKEN
         sync: false
-      - key: GREEN_API_TOKEN
+      - key: ALLOWED_TELEGRAM_IDS
         sync: false
+      - key: RAMI_LEVY_STORE_ID
+        value: 331
       - key: RAMI_LEVY_API_KEY
         sync: false
       - key: RAMI_LEVY_ECOM_TOKEN
         sync: false
       - key: RAMI_LEVY_COOKIE
         sync: false
-      - key: RAMI_LEVY_STORE_ID
-        value: 331
       - key: NODE_ENV
         value: production

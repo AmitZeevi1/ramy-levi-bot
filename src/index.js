@@ -1,115 +1,76 @@
 require('dotenv').config();
 
-const express = require('express');
-const bodyParser = require('body-parser');
-const axios = require('axios');
-const { handleShoppingList } = require('./bot');
+const { Telegraf } = require('telegraf');
+const { handleShoppingList, handleSetToken } = require('./bot');
 
-const app = express();
-app.use(bodyParser.json());
+const ALLOWED_IDS = (process.env.ALLOWED_TELEGRAM_IDS || '')
+  .split(',')
+  .map((s) => parseInt(s.trim(), 10))
+  .filter(Boolean);
 
-const INSTANCE_ID    = process.env.GREEN_API_INSTANCE_ID;
-const INSTANCE_TOKEN = process.env.GREEN_API_TOKEN;
-const GREEN_BASE     = `https://api.green-api.com/waInstance${INSTANCE_ID}`;
+const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
 
-// ─────────────────────────────────────────────
-// Send a WhatsApp message via Green API
-// chatId format: "972501234567@c.us"
-// ─────────────────────────────────────────────
-async function sendMessage(chatId, text) {
-  await axios.post(
-    `${GREEN_BASE}/sendMessage/${INSTANCE_TOKEN}`,
-    { chatId, message: text },
-    { timeout: 10000 }
-  );
-}
+// Auth middleware
+bot.use((ctx, next) => {
+  if (ALLOWED_IDS.length > 0 && !ALLOWED_IDS.includes(ctx.from?.id)) {
+    return ctx.reply('אין לך הרשאה להשתמש בבוט זה.');
+  }
+  return next();
+});
 
-// ─────────────────────────────────────────────
-// POST /webhook  — Green API calls this on every incoming message
-// ─────────────────────────────────────────────
-app.post('/webhook', async (req, res) => {
-  // Always acknowledge immediately
-  res.sendStatus(200);
+bot.start((ctx) =>
+  ctx.reply(
+    'שלום! 👋 אני *RamiBot*.\n\nשלח לי רשימת קניות ואני אבנה לך סל ברמי לוי.\n\nפקודות:\n/settoken — הגדרת טוקנים לרמי לוי\n/help — עזרה',
+    { parse_mode: 'Markdown' }
+  )
+);
 
-  const body = req.body;
+bot.help((ctx) =>
+  ctx.reply(
+    '*RamiBot — עזרה*\n\n' +
+    'שלח רשימת קניות בכל פורמט:\n' +
+    '• חלב 3%\n• לחם אחיד\n• ביצים x2\n\n' +
+    '*הגדרת טוקנים:*\n' +
+    '1. היכנס לאתר רמי לוי ← F12 ← Network\n' +
+    '2. חפש מוצר כלשהו\n' +
+    '3. לחץ על בקשת /api/catalog\n' +
+    '4. העתק את הערכים מ-Request Headers:\n' +
+    '   - Authorization (ללא "Bearer ")\n' +
+    '   - ecomtoken\n' +
+    '   - cookie\n' +
+    '5. שלח: /settoken <token> <ecomtoken> <cookie>',
+    { parse_mode: 'Markdown' }
+  )
+);
 
-  // Green API sends several webhook types — we only care about incoming messages
-  if (body?.typeWebhook !== 'incomingMessageReceived') return;
+bot.command('settoken', (ctx) => {
+  const ok = handleSetToken(ctx.message.text);
+  if (ok) {
+    ctx.reply('✅ טוקנים הוגדרו בהצלחה! שלח רשימת קניות כדי לבדוק.');
+  } else {
+    ctx.reply(
+      'פורמט שגוי. השתמש ב:\n`/settoken <apiKey> <ecomToken> <cookie>`',
+      { parse_mode: 'Markdown' }
+    );
+  }
+});
 
-  const messageData = body?.messageData;
-  if (messageData?.typeMessage !== 'textMessage') return;
-
-  const chatId = body?.senderData?.chatId;
-  const text   = messageData?.textMessageData?.textMessage || '';
-
-  if (!chatId || !text) return;
-
-  console.log(`[webhook] From ${chatId}: "${text.slice(0, 80)}"`);
+bot.on('text', async (ctx) => {
+  const text = ctx.message.text;
+  if (text.startsWith('/')) return;
 
   try {
+    await ctx.sendChatAction('typing');
     const reply = await handleShoppingList(text);
-    await sendMessage(chatId, reply);
-    console.log(`[webhook] Reply sent to ${chatId}`);
+    await ctx.reply(reply, { parse_mode: 'Markdown' });
   } catch (err) {
-    console.error('[webhook] Error:', err.message);
-    try {
-      await sendMessage(chatId, '😕 משהו השתבש. נסה שוב בעוד כמה שניות.');
-    } catch (_) {}
+    console.error('[bot] Error:', err.message);
+    await ctx.reply('😕 משהו השתבש. נסה שוב בעוד כמה שניות.');
   }
 });
 
-// ─────────────────────────────────────────────
-// GET /health
-// ─────────────────────────────────────────────
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
+bot.launch();
+console.log('🤖 RamiBot (Telegram) is running...');
 
-// ─────────────────────────────────────────────
-// POST /test  — test without WhatsApp
-// Body: { "message": "חלב, לחם, ביצים" }
-// ─────────────────────────────────────────────
-app.post('/test', async (req, res) => {
-  const { message } = req.body;
-  if (!message) return res.status(400).json({ error: 'message field required' });
-  try {
-    const reply = await handleShoppingList(message);
-    res.json({ reply });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ─────────────────────────────────────────────
-// GET /debug  — test Rami Levy API directly
-// ─────────────────────────────────────────────
-app.get('/debug', async (req, res) => {
-  try {
-    const response = await axios.get('https://www.rami-levy.co.il/api/catalog', {
-      headers: {
-        'accept': 'application/json, text/plain, */*',
-        'accept-language': 'he-IL,he;q=0.9',
-        'authorization': `Bearer ${process.env.RAMI_LEVY_API_KEY}`,
-        'ecomtoken': process.env.RAMI_LEVY_ECOM_TOKEN,
-        'cookie': process.env.RAMI_LEVY_COOKIE,
-        'locale': 'he',
-        'origin': 'https://www.rami-levy.co.il',
-        'referer': 'https://www.rami-levy.co.il/he',
-        'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-      },
-      params: { q: 'חלב', store: process.env.RAMI_LEVY_STORE_ID || '331', aggs: 1 },
-      timeout: 8000,
-    });
-    res.json({ status: response.status, count: response.data?.data?.length, first: response.data?.data?.[0] });
-  } catch (err) {
-    res.status(500).json({ status: err.response?.status, message: err.message, data: err.response?.data });
-  }
-});
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`\n🤖 RamiBot (Green API) running on port ${PORT}`);
-  console.log(`   Webhook: POST http://localhost:${PORT}/webhook`);
-  console.log(`   Test:    POST http://localhost:${PORT}/test`);
-  console.log(`   Health:  GET  http://localhost:${PORT}/health\n`);
-});
+process.once('SIGINT', () => bot.stop('SIGINT'));
+process.once('SIGTERM', () => bot.stop('SIGTERM'));

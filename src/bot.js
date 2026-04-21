@@ -1,15 +1,11 @@
-const { searchProducts, createCart } = require('./ramiLevyClient');
+const { searchProducts, createCart, setSession, hasSession } = require('./ramiLevyClient');
 const { parseShoppingList, formatReplyMessage } = require('./listParser');
 
-/**
- * Main bot handler. Called with the raw WhatsApp message text.
- * Returns a formatted reply string.
- *
- * @param {string} messageBody - Raw text from the user
- * @returns {Promise<string>} - Reply to send back
- */
 async function handleShoppingList(messageBody) {
-  // 1. Parse the shopping list
+  if (!hasSession()) {
+    return 'לא מחובר לרמי לוי. שלח /settoken כדי להגדיר את הטוקנים.';
+  }
+
   const items = parseShoppingList(messageBody);
 
   if (items.length === 0) {
@@ -28,22 +24,14 @@ async function handleShoppingList(messageBody) {
 
   console.log(`[bot] Parsed ${items.length} items:`, items.map((i) => i.name));
 
-  // 2. Send a "working on it" indicator (returned before async work in webhook context)
-  // The actual processing happens below
-
-  // 3. Search for all products in parallel
   const queries = items.map((i) => i.name);
   const searchResults = await searchProducts(queries);
 
-  // 4. Build cart from found items
   const foundItems = searchResults
     .filter((r) => r.result !== null)
     .map(({ query, result }) => {
       const originalItem = items.find((i) => i.name === query);
-      return {
-        id: result.id,
-        quantity: originalItem?.quantity ?? 1,
-      };
+      return { id: result.id, quantity: originalItem?.quantity ?? 1 };
     });
 
   let cart = null;
@@ -51,8 +39,20 @@ async function handleShoppingList(messageBody) {
     cart = await createCart(foundItems);
   }
 
-  // 5. Format and return the reply
   return formatReplyMessage(searchResults, cart);
 }
 
-module.exports = { handleShoppingList };
+// Returns true on success, false on bad format
+function handleSetToken(text) {
+  // Expected: /settoken <apiKey> <ecomToken> <cookie>
+  const parts = text.trim().split(/\s+/);
+  if (parts.length < 4) return false;
+
+  const [, apiKey, ecomToken, ...cookieParts] = parts;
+  const cookie = cookieParts.join(' ');
+
+  setSession(apiKey, ecomToken, cookie);
+  return true;
+}
+
+module.exports = { handleShoppingList, handleSetToken };
