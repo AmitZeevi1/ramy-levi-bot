@@ -97,7 +97,7 @@ async function createCart(items, storeId = process.env.RAMI_LEVY_STORE_ID || '33
 
     const data = response.data;
     return {
-      cartUrl: `${BASE_URL}/he/cart`,
+      cartUrl: `${BASE_URL}/he/`,
       total: data?.totals?.total ?? null,
       itemCount: Object.keys(itemsMap).length,
     };
