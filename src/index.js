@@ -1,7 +1,14 @@
 require('dotenv').config();
 
+const express = require('express');
 const { Telegraf } = require('telegraf');
 const { handleShoppingList, handleSetToken } = require('./bot');
+
+// Keep-alive HTTP server (required for Render free Web Service)
+const app = express();
+app.get('/health', (_, res) => res.json({ status: 'ok' }));
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Health check on port ${PORT}`));
 
 const ALLOWED_IDS = (process.env.ALLOWED_TELEGRAM_IDS || '')
   .split(',')
