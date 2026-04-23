@@ -116,8 +116,21 @@ bot.on('text', async (ctx) => {
   }
 });
 
-bot.launch();
-console.log('🤖 RamiBot (Telegram) is running...');
+async function launch() {
+  try {
+    await bot.launch({ dropPendingUpdates: true });
+    console.log('🤖 RamiBot (Telegram) is running...');
+  } catch (err) {
+    if (err.response?.error_code === 409) {
+      console.log('409 conflict — waiting 5s for previous instance to stop...');
+      await new Promise((r) => setTimeout(r, 5000));
+      return launch();
+    }
+    throw err;
+  }
+}
+
+launch();
 
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
