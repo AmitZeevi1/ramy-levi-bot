@@ -1,6 +1,11 @@
-const Anthropic = require('@anthropic-ai/sdk');
+const { AzureOpenAI } = require('openai');
 
-const client = new Anthropic();
+const client = new AzureOpenAI({
+  endpoint: process.env.AZURE_OPENAI_ENDPOINT,
+  apiKey: process.env.AZURE_OPENAI_API_KEY,
+  apiVersion: process.env.AZURE_OPENAI_API_VERSION || '2025-01-01-preview',
+  deployment: process.env.AZURE_OPENAI_DEPLOYMENT || 'gpt-5',
+});
 
 const SYSTEM_PROMPT = `אתה עוזר לניתוח רשימות קניות בסופרמרקט רמי לוי.
 קיבלת רשימת פריטים. עבור כל פריט, החלט:
@@ -21,16 +26,20 @@ const SYSTEM_PROMPT = `אתה עוזר לניתוח רשימות קניות בס
 }`;
 
 async function analyzeShoppingList(items) {
-  const itemsList = items.map((item) => `- ${item.name}${item.quantity > 1 ? ` (כמות: ${item.quantity})` : ''}`).join('\n');
+  const itemsList = items
+    .map((item) => `- ${item.name}${item.quantity > 1 ? ` (כמות: ${item.quantity})` : ''}`)
+    .join('\n');
 
-  const response = await client.messages.create({
-    model: 'claude-haiku-4-5-20251001',
+  const response = await client.chat.completions.create({
+    model: process.env.AZURE_OPENAI_DEPLOYMENT || 'gpt-5',
     max_tokens: 1024,
-    system: SYSTEM_PROMPT,
-    messages: [{ role: 'user', content: `רשימת קניות:\n${itemsList}` }],
+    messages: [
+      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'user', content: `רשימת קניות:\n${itemsList}` },
+    ],
   });
 
-  const text = response.content[0].text.trim();
+  const text = response.choices[0].message.content.trim();
   const json = JSON.parse(text);
   return json.clarified;
 }
@@ -49,14 +58,16 @@ async function mergeClarifications(pendingItems, answers) {
     .map((item, i) => `פריט: ${item.original}\nשאלה: ${item.question}\nתשובה: ${answers[i] || ''}`)
     .join('\n\n');
 
-  const response = await client.messages.create({
-    model: 'claude-haiku-4-5-20251001',
+  const response = await client.chat.completions.create({
+    model: process.env.AZURE_OPENAI_DEPLOYMENT || 'gpt-5',
     max_tokens: 512,
-    system: MERGE_PROMPT,
-    messages: [{ role: 'user', content: context }],
+    messages: [
+      { role: 'system', content: MERGE_PROMPT },
+      { role: 'user', content: context },
+    ],
   });
 
-  const text = response.content[0].text.trim();
+  const text = response.choices[0].message.content.trim();
   const json = JSON.parse(text);
   return json.resolved;
 }
