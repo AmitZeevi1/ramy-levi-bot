@@ -112,7 +112,7 @@ bot.on('text', async (ctx) => {
     await ctx.reply(reply, { parse_mode: 'Markdown' });
   } catch (err) {
     console.error('[bot] Error:', err.message);
-    await ctx.reply('😕 משהו השתבש. נסה שוב בעוד כמה שניות.');
+    await ctx.reply(`😕 שגיאה: ${err.message}`);
   }
 });
 
