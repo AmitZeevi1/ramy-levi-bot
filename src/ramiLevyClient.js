@@ -46,11 +46,13 @@ async function searchProduct(query, storeId = process.env.RAMI_LEVY_STORE_ID || 
     if (!items || items.length === 0) return null;
 
     const best = items[0];
+    const storeIdNum = Number(storeId);
     return {
       id: best.id,
       name: best.name,
       price: best.price?.price ?? null,
       imageUrl: best.images?.small ?? null,
+      outOfStock: best.prop?.status === 0 || (best.available_in && !best.available_in.includes(storeIdNum)),
     };
   } catch (err) {
     console.error(`[searchProduct] Error searching "${query}":`, err.message);
